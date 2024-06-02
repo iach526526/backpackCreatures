@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "monster.h"
 #include "LiquidCrystal_I2C.h"
 #include <time.h>
 #include <vector>
@@ -23,15 +22,18 @@ char monsterTemplates[8][8] = {
 unsigned int NumRand();
 struct monster{
     char iconId = 0;
-    char atk=0;
+    char atk= 0;
     char hp = 0;
+    bool occupied = false;
     void random() {
-        iconId = 6;
+        iconId = rand();
         atk = NumRand();
         hp = NumRand();
+        occupied = true;
     }
 };
 struct monster monsters[backpackSize];
+
 
 unsigned int monsterCount = 1;
 unsigned int selectIndex = 0;
@@ -50,26 +52,23 @@ void setupTimer() {
 }
 
 int nowChar;
-
+char blank[] = " ";
 unsigned int NumRand(){
     static long int seed = (time(NULL));;
     seed = (seed * 12345 + 54321) & 0x7fffffff;
-    return seed % 99;
+    return seed % 99+1;
 }
 
 
 int rand() {
   static long int seed = (time(NULL));;
   seed = (seed * 110351 + 12345) & 0x7fffffff;
-  int secondSeed = (tick * 177483 + 54544) & 0x7fff4fff;
-  unsigned int specficType = secondSeed%2;
-  if (specficType == 0){
+  if (tick%1 == 0){
       return seed % 7;
-  }else if (specficType == 1){
-      nowChar = 10 + seed%30;
-      return nowChar;
   }else{
-      return 73 + seed%42;
+      nowChar = 33+seed%222;
+      if (nowChar == 254 || nowChar == 160) nowChar = seed%7;
+      return nowChar;
   }
 }
 
@@ -81,9 +80,19 @@ void delay(unsigned int ms) {
 }
 
 void displayAllMonsters(){
-    for (int i = 0; i < monsterCount-1; i++) {
-       LCD_ShowCustomChar(monsters[i].iconId,i,0);
+    __enable_interrupt();
+    for(int j=backpackSize-1;j>=0;j--)
+    {
+        LCD_ShowCustomChar(char(254),j,0);
     }
+    int i=0;
+    while(monsters[i].occupied)
+    {
+       LCD_ShowCustomChar(monsters[i].iconId,i,0);
+        i++;
+    }
+//    for (int i = 0; i <monsterCount-1-1; i++) {
+//    }
 }
 
 void removeMonsterAtSelection() {
@@ -91,22 +100,21 @@ void removeMonsterAtSelection() {
         //due to the fact that if there is only one monster, deleting it would cause multiple issues, such as the fact that the selection pointer has to be visible at all times.
         return;
     }
-    __enable_interrupt();
     // Shift elements to the left
-    for (int i = selectIndex; i < monsterCount - 1; i++) {
+    int i;
+    for (i = selectIndex; i < monsterCount - 1; i++) {
         monsters[i] = monsters[i + 1];
     }
-    displayAllMonsters();
-
+    monsters[monsterCount-1].occupied = false;
+//    LCD_ShowCustomChar(124,i+2,0);
+    //__enable_interrupt();
     if (selectIndex == monsterCount-1){
         selectIndex -= 1;
     }
-    LCD_SetCursor(monsterCount-1, 0);
-    char blank[] = " ";
-    LCD_Write(blank);
 
     // Update size
     (monsterCount)--;
+    displayAllMonsters();
 }
 
 
@@ -114,7 +122,7 @@ void addElement() {
   if (monsterCount < backpackSize) {
     monsterCount++;
     monsters[monsterCount - 1].random();
-    LCD_ShowCustomChar(monsters[monsterCount - 1].iconId, monsterCount - 1, 0); //show the new one
+    //LCD_ShowCustomChar(monsters[monsterCount - 1].iconId, monsterCount - 1, 0); //show the new one
   }
 }
 
@@ -150,23 +158,50 @@ void setupLCD() {
     }
 }
 
+void fixedNum(int x, int num){
+    LCD_SetCursor(x, 1);
+    LCD_WriteNum(0);
+    LCD_SetCursor((num>=10)?x:x+1, 1);
+    LCD_WriteNum(num);
+}
+char MSG_atk[] = {'A','T','K',':','\0'};
+char MSG_hp[] = {'H','P',':','\0'};
+char buffer[32];
+bool removeEven=false;
 void main(void) {
     setupPorts();
     setupTimer();
-  __enable_interrupt(); //Enable maskable interrupts
+    //__enable_interrupt(); //Enable maskable interrupts
 
   // LCD function call and setups:
   setupLCD();
-  while (1) {
-    flashing = ~flashing;
-    LCD_ShowCustomChar((flashing) ? 255 : monsters[selectIndex].iconId, selectIndex, 0);
-    //refresh number
-    LCD_SetCursor(14, 1);
-    LCD_WriteNum(0);
-    LCD_SetCursor((monsterCount>=10)?14:15, 1);
-    LCD_WriteNum(monsterCount);
-    __delay_cycles(500000);
+  //create first monster
+  monsters[0].random();
+  unsigned int loopCount = 0;
+  while(1){
+      loopCount += 1;
+      if (loopCount % 3 == 0) {flashing = ~flashing;}
+      for (int i = 0; i < monsterCount; i++) {
+          if (monsters[i].occupied == true ){
+              LCD_ShowCustomChar((flashing & i == selectIndex) ? 255 : monsters[i].iconId,i,0);//255 æ˜¯å…¨é»‘ç·¨ç¢¼ï¼Œé€™è£¡åœ¨å…¨é»‘å’Œè…³è‰²åœ–å½¢åšé¸æ“‡
+          }else{
+              LCD_ShowCustomChar(254,i,0);
+          }
+      }
+      LCD_SetCursor(0,1);
+      sprintf(buffer, "%s%d%s%d", MSG_atk,  monsters[selectIndex].atk, MSG_hp,  monsters[selectIndex].hp);
+      LCD_Write(buffer);
+
+      //ç¬¬äºŒèˆªæœ€å¾Œå…©å€‹æ–‡å­—æ”¾æ€ªç‰©ç¸½æ•¸
+      fixedNum(14, monsterCount);
+      delay(200);
+      if(removeEven)
+      {
+          removeMonsterAtSelection();
+          removeEven=false;
+      }
   }
+
 }
 
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
@@ -185,8 +220,6 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) Port_2 (void)
         debounceTimer = DEBOUNCE_TIME;
         // Button press detected
 
-        __enable_interrupt();//±Ò¥ÎÂù¼h¤¤Â_¡A¦]¬°LCD_Send·|Ä²µo¤¤Â_¼g¤JLCD
-
         LCD_ShowCustomChar(monsters[selectIndex].iconId,selectIndex,0);
 
         selectIndex = (selectIndex + 1) % monsterCount;
@@ -200,15 +233,13 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) Port_2 (void)
         if (debounceTimer > 0) return; // Check debounce time
         debounceTimer = DEBOUNCE_TIME;
         // Button press detected
-        __enable_interrupt();
-        LCD_ShowCustomChar(monsters[selectIndex].iconId,selectIndex,0);
         addElement();
     }else if (P2IFG&BIT2){//P2.2 trap
         P2IFG &= ~BIT2;
         if (debounceTimer > 0) return; // Check debounce time
         debounceTimer = DEBOUNCE_TIME;
-        __enable_interrupt();
-        removeMonsterAtSelection();
+        removeEven=true;
+
     }else if (P2IFG&BIT3){//P2.3 trap
         //refresh
         P2IFG &= ~BIT3;
