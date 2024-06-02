@@ -167,7 +167,7 @@ void fixedNum(int x, int num){
 char MSG_atk[] = {'A','T','K',':','\0'};
 char MSG_hp[] = {'H','P',':','\0'};
 char buffer[32];
-bool removeEven=false;
+bool removeEvent=false;
 void main(void) {
     setupPorts();
     setupTimer();
@@ -195,10 +195,10 @@ void main(void) {
       //第二航最後兩個文字放怪物總數
       fixedNum(14, monsterCount);
       delay(200);
-      if(removeEven)
+      if(removeEvent)
       {
           removeMonsterAtSelection();
-          removeEven=false;
+          removeEvent=false;
       }
   }
 
@@ -215,6 +215,7 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) Port_2 (void)
 {
     if(P2IFG&BIT0)//P2.0 trap
     {
+       //select the next element (mosnter)
         P2IFG &= ~BIT0;
         if (debounceTimer > 0) return; // Check debounce time
         debounceTimer = DEBOUNCE_TIME;
@@ -229,16 +230,18 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) Port_2 (void)
 
     }
     else if(P2IFG&BIT1){//P2.1 trap
+       //adding element
         P2IFG &= ~BIT1;
         if (debounceTimer > 0) return; // Check debounce time
         debounceTimer = DEBOUNCE_TIME;
         // Button press detected
         addElement();
     }else if (P2IFG&BIT2){//P2.2 trap
+       //remove element
         P2IFG &= ~BIT2;
         if (debounceTimer > 0) return; // Check debounce time
         debounceTimer = DEBOUNCE_TIME;
-        removeEven=true;
+        removeEvent=true; //due to the fact that removing has to also be inside the loop, we use a boolean to call the particular function.
 
     }else if (P2IFG&BIT3){//P2.3 trap
         //refresh
